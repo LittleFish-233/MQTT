@@ -1,0 +1,31 @@
+﻿<MButton Dark
+         Loading="loading2"
+         Color="primary"
+         OnClick="OnClick2">
+    <MIcon Left Dark>
+       @Icon
+    </MIcon>
+    @Text
+
+</MButton>
+
+@code {
+    [Parameter]
+    public string Icon { get; set; }
+
+    [Parameter]
+    public string Text { get; set; }
+
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    private bool loading2 = false;
+    private async void OnClick2()
+    {
+        loading2 = true;
+        await InvokeAsync(StateHasChanged);
+        await OnClick.InvokeAsync();
+        loading2 = false;
+        await InvokeAsync(StateHasChanged);
+    }
+}

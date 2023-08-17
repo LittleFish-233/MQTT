@@ -1,0 +1,49 @@
+﻿@inherits LayoutComponentBase
+
+<MApp>
+    <MAppBar Color="primary" App Dark>
+        <MAppBarNavIcon @onclick="() => drawer = true"></MAppBarNavIcon>
+
+        <MToolbarTitle>MQTT调试工具</MToolbarTitle>
+    </MAppBar>
+
+    <MNavigationDrawer @bind-Value="drawer"  App Absolute Temporary>
+        <MList Nav Dense>
+            <MListItemGroup @bind-Value="group"
+                            ActiveClass="deep-purple--text text--accent-4">
+                <MListItem>
+                    <MListItemIcon>
+                        <MIcon>mdi-home</MIcon>
+                    </MListItemIcon>
+                    <MListItemTitle>Home</MListItemTitle>
+                </MListItem>
+
+                <MListItem>
+                    <MListItemIcon>
+                        <MIcon>mdi-account</MIcon>
+                    </MListItemIcon>
+                    <MListItemTitle>Account</MListItemTitle>
+                </MListItem>
+            </MListItemGroup>
+        </MList>
+    </MNavigationDrawer>
+
+    <!-- 根据应用组件来调整你的内容 -->
+    <MMain>
+        <!-- 给应用提供合适的间距 -->
+        <MContainer Fluid Style="display: flex; justify-content: center; max-width: 1000px; ">
+            @Body
+        </MContainer>
+    </MMain>
+
+    <MFooter App>
+        <!-- -->
+    </MFooter>
+</MApp>
+
+
+@code {
+    bool drawer;
+    StringNumber group;
+}
+

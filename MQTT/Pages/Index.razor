@@ -1,0 +1,313 @@
+﻿@page "/"
+@inject ILocalStorageService _localStorage
+@inject ILogger<Index> _logger
+
+<PageTitle>MQTT调试工具</PageTitle>
+
+<MRow>
+    <MCol Cols="12">
+        <MCard>
+            <MCardTitle>MQTT服务端参数</MCardTitle>
+            <MCardText>
+                <MTextField @bind-Value="Server.IP" Label="IP" Clearable>
+                </MTextField>
+            </MCardText>
+            <MCardActions Style=" display: flex; justify-content: flex-end;">
+                <MasaButton Icon="mdi-link" OnClick="Connect" Text="连接"></MasaButton>
+            </MCardActions>
+        </MCard>
+    </MCol>
+    <MCol Cols="12">
+        <MCard>
+            <MCardTitle>消息列表</MCardTitle>
+            <MCardText>
+
+                <MRow>
+                    @foreach (var item in Messages)
+                    {
+                        <MCol Cols="12" Style="display: flex; gap: 1rem; align-items: center; ">
+                            <MCheckbox @bind-Value="item.IsDelete" />
+                            <MTextField @bind-Value="item.Topic" Label="主题" HideDetails="true">
+                            </MTextField>
+                            <MTextField @bind-Value="item.Message" Label="内容" HideDetails="true">
+                            </MTextField>
+                            <MasaButton Icon="mdi-send" OnClick="@(()=>SendMessage(item.Topic,item.Message))" Text="发送" />
+                        </MCol>
+                    }
+
+                </MRow>
+            </MCardText>
+            <MCardActions>
+                <MasaButton Icon="mdi-plus" OnClick="AddMessage" Text="添加"></MasaButton>
+                <MasaButton Icon="mdi-delete" OnClick="DeleteMessage" Text="删除"></MasaButton>
+            </MCardActions>
+        </MCard>
+    </MCol>
+
+
+    @foreach (var item in Subscribes)
+    {
+        <MCol Cols="12" Md="6">
+            <MCard Style=" display: flex; flex-direction: column; justify-content: space-between;height:100%">
+                <MCardTitle>订阅：@item.Topic</MCardTitle>
+                <MCardText>
+                    @if (item.Messages.Any() == false)
+                    {
+                        <div>
+                            无消息
+                        </div>
+                    }
+                    <div style=" display: flex;max-height: 200px; overflow-y: auto; flex-direction: column; width: 100%;">
+                        @foreach (var info in item.Messages)
+                        {
+                            <div style="@(info.Time.AddSeconds(5)<DateTime.Now?"color: black;":"color: green;font-weight: bold;")">
+                                <span>@($"[{info.Time:T}]")</span>
+                                <span>@($" {info.Message}")</span>
+                            </div>
+                        }
+                    </div>
+                </MCardText>
+                <MCardActions Style=" display: flex; justify-content: flex-end;">
+                    <MasaButton Icon="mdi-delete" OnClick="@(()=>DeleteTopic(item.Topic))" Text="删除"></MasaButton>
+                </MCardActions>
+            </MCard>
+        </MCol>
+
+    }
+<MCol Cols="12" Md="6">
+    <MCard Style="display: flex; flex-direction: column; justify-content: flex-start; height: 100%; ">
+        <MCardTitle>添加主题订阅</MCardTitle>
+        <MCardText>
+            <MTextField @bind-Value="_subscribeTopicName" Label="主题" Clearable HideDetails="true">
+            </MTextField>
+        </MCardText>
+        <MCardActions Style=" display: flex; justify-content: flex-end;">
+            <MasaButton Icon="mdi-plus" OnClick="@(()=>SubscribeTopic(_subscribeTopicName))" Text="添加"></MasaButton>
+        </MCardActions>
+    </MCard>
+</MCol>
+</MRow>
+
+<MSnackbar @bind-Value="_snackbar" Timeout="2000" Color="@_snackbarColor">
+    <ChildContent>
+        @_snackbarContent
+    </ChildContent>
+    <ActionContent>
+        <MButton Color="white"
+                 Icon
+                 OnClick="()=>_snackbar = false">
+            <MIcon>mdi-close</MIcon>
+        </MButton>
+    </ActionContent>
+</MSnackbar>
+
+
+@code{
+    private bool _snackbar;
+    private string _snackbarContent;
+    private string _snackbarColor;
+
+    private string _subscribeTopicName;
+
+    public ServerModel Server { get; set; } = new ServerModel();
+
+    IMqttClient _MqttClient { get; set; }
+
+    Task BackgroundTask;
+
+    public List<SubscribeModel> Subscribes = new List<SubscribeModel>
+    {
+            new SubscribeModel
+            {
+                Topic="led_ctl"
+            }
+        };
+
+    public List<MessageModel> Messages { get; set; } = new List<MessageModel>
+{
+       new MessageModel
+       {
+           Message="led 1 1",
+           Topic="led_ctl"
+       }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var model = await _localStorage.GetItemAsync<List<MessageModel>>("messages");
+            if (model != null)
+            {
+                Messages = model;
+
+            }
+
+            var server = await _localStorage.GetItemAsync<ServerModel>("server");
+            if (server != null)
+            {
+                Server = server;
+            }
+
+            var subscribes = await _localStorage.GetItemAsync<List<SubscribeModel>>("subscribes");
+            if (subscribes != null)
+            {
+                Subscribes = subscribes;
+            }
+
+            StateHasChanged();
+
+            BackgroundTask = Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(1000);
+                    await InvokeAsync(StateHasChanged);
+                }
+
+            });
+        }
+    }
+
+    public async Task Connect()
+    {
+        try
+        {
+            var mqttFactory = new MqttFactory();
+
+            _MqttClient = mqttFactory.CreateMqttClient();
+
+            // Use builder classes where possible in this project.
+            var mqttClientOptions = new MqttClientOptionsBuilder().WithTcpServer(Server.IP).Build();
+
+            // This will throw an exception if the server is not available.
+            // The result from this message returns additional data which was sent
+            // from the server. Please refer to the MQTT protocol specification for details.
+            var response = await _MqttClient.ConnectAsync(mqttClientOptions, CancellationToken.None);
+            await _localStorage.SetItemAsync<ServerModel>("server", Server);
+            Toast("success", "连接成功");
+
+
+
+            _MqttClient.ApplicationMessageReceivedAsync += ApplicationMessageReceivedAsync;
+
+            foreach (var item in Subscribes)
+            {
+                await SubscribeTopic(item.Topic);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "连接失败");
+            Toast("red", "连接失败");
+        }
+    }
+
+    public async Task ApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs e)
+    {
+        var model=  Subscribes.FirstOrDefault(s => s.Topic == e.ApplicationMessage.Topic);
+        if(model!=null)
+        {
+            model.Messages.Insert(0,new SubscribeMessageModel
+            {
+                Time=DateTime.Now,
+                Message = UTF8Encoding.UTF8.GetString(e.ApplicationMessage.PayloadSegment)
+            });
+            StateHasChanged();
+        }
+    }
+
+    public async Task SendMessage(string topic, string msg)
+    {
+        if (_MqttClient == null || _MqttClient.IsConnected == false)
+        {
+            Toast("red", "请先连接服务器");
+            return;
+        }
+        await _localStorage.SetItemAsync<List<MessageModel>>("messages", Messages);
+        await _MqttClient.PublishStringAsync(topic, $"{msg}\n");
+        Toast("success", "成功发送消息");
+    }
+
+    public async void AddMessage()
+    {
+        Messages.Add(new MessageModel());
+        StateHasChanged();
+        await _localStorage.SetItemAsync<List<MessageModel>>("messages", Messages);
+    }
+
+    public async void DeleteMessage()
+    {
+        Messages.RemoveAll(s => s.IsDelete);
+        StateHasChanged();
+        await _localStorage.SetItemAsync<List<MessageModel>>("messages", Messages);
+        Toast("info", "删除消息");
+    }
+
+    public void Toast(string color, string text)
+    {
+        _snackbarColor = color;
+        _snackbarContent = text;
+        _snackbar = true;
+        StateHasChanged();
+    }
+
+    public async Task SubscribeTopic(string topic)
+    {
+        if (_MqttClient == null || _MqttClient.IsConnected == false)
+        {
+            Toast("red", "请先连接服务器");
+            return;
+        }
+        if(Subscribes.Any(s=>s.Topic==topic))
+        {
+            Toast("red", "已经订阅该主题");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            Toast("red", "主题不能为空");
+            return;
+        }
+        try
+        {
+            var mqttFactory = new MqttFactory();
+
+            var mqttSubscribeOptions = mqttFactory.CreateSubscribeOptionsBuilder()
+            .WithTopicFilter(
+                f =>
+                {
+                    f.WithTopic(topic);
+                })
+            .Build();
+
+            await _MqttClient.SubscribeAsync(mqttSubscribeOptions, CancellationToken.None);
+
+            if(Subscribes.Any(s=>s.Topic==topic) == false)
+            {
+                Subscribes.Add(new SubscribeModel
+                {
+                    Topic = topic
+                });
+            }
+
+
+            await _localStorage.SetItemAsync<List<SubscribeModel>>("subscribes", Subscribes);
+            StateHasChanged();
+            Toast("success", "成功订阅主题");
+        }
+        catch(Exception ex)
+        {
+            _logger.LogError(ex, "订阅主题失败");
+            Toast("red", "订阅主题失败");
+        }
+
+    }
+
+    public async Task DeleteTopic(string topic)
+    {
+        Subscribes.RemoveAll(s => s.Topic == topic);
+        await _localStorage.SetItemAsync<List<SubscribeModel>>("subscribes", Subscribes);
+        Toast("info", "取消订阅主题");
+    }
+}
