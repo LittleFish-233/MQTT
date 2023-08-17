@@ -6,7 +6,6 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
-builder.WebHost.UseUrls("http://*:5000");
 builder.Services.AddServerSideBlazor();
 builder.Services.AddMasaBlazor(options =>
 {
