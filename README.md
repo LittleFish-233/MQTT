@@ -25,4 +25,4 @@ MQTTnet: https://github.com/dotnet/MQTTnet
 
 ## °æÈ¨Ðí¿É
 
-[License MIT](/LittleFish-233/MQTT/blob/master/LICENSE.txt)
+[License MIT](LICENSE.txt)
